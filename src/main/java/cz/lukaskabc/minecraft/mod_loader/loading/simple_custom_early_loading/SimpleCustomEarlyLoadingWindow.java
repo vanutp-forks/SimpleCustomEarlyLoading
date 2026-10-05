@@ -19,8 +19,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -31,6 +34,7 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
     private static final Logger LOG = LogManager.getLogger();
     private final RefDisplayWindow accessor;
     private final Config configuration;
+    private ScheduledFuture<?> resizeTick;
 
     public SimpleCustomEarlyLoadingWindow() {
         this.accessor = new RefDisplayWindow(this);
@@ -211,16 +215,18 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
         accessor.setRenderScheduler(renderScheduler);
         initWindow(mcVersion);
 
-        glfwSetFramebufferSizeCallback(accessor.getGlWindow(), (window, width, height) -> {
-            width = size(width);
-            height = size(height);
-            if (accessor.getFbWidth() != width || accessor.getFbHeight() != height) {
-                accessor.setFBSize(width, height);
-                if (!configuration.hasCustomResolution()) {
-                    accessor.getRenderScheduler().schedule(this::recreateContext, 1, TimeUnit.MILLISECONDS);
-                }
-            }
-        });
+        // No clue why it was here, but everything seems the same without it soo
+        //
+        // glfwSetFramebufferSizeCallback(accessor.getGlWindow(), (window, width, height) -> {
+        //     width = size(width);
+        //     height = size(height);
+        //     if (accessor.getFbWidth() != width || accessor.getFbHeight() != height) {
+        //         accessor.setFBSize(width, height);
+        //         if (!configuration.hasCustomResolution()) {
+        //             accessor.getRenderScheduler().schedule(this::recreateContext, 1, TimeUnit.MILLISECONDS);
+        //         }
+        //     }
+        // });
 
         final var initializationFuture = renderScheduler.schedule(() -> {
             accessor.initRender(mcVersion, forgeVersion);
@@ -232,7 +238,8 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
 
     @Override
     public void render(int alpha) {
-        resizeWhenNeeded();
+        // Rendering inside NeoForgeLoadingOverlay (last stage, after handoff)
+        resizeWhenNeeded(false);
         super.render(alpha);
     }
 
@@ -248,12 +255,21 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
      * with other scheduled tasks.
      */
     private void afterInitRender(String mcVersion, String forgeVersion) {
+        resizeTick = accessor.getRenderScheduler().scheduleAtFixedRate(() -> resizeWhenNeeded(true), 50, 50, TimeUnit.MILLISECONDS);
         recreateContext();
         glfwMakeContextCurrent(accessor.getGlWindow());
         final List<RenderElement> elements = accessor.getElements();
         elements.clear();
         constructElements(mcVersion, forgeVersion, elements);
         glfwMakeContextCurrent(0);
+    }
+
+    @Override
+    public long setupMinecraftWindow(IntSupplier width, IntSupplier height, Supplier<String> title, LongSupplier monitorSupplier) {
+        while (!resizeTick.isDone()) {
+            resizeTick.cancel(false);
+        }
+        return super.setupMinecraftWindow(width, height, title, monitorSupplier);
     }
 
     /**
@@ -285,13 +301,7 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
         accessor.getElements().addLast(RenderElement.mojang(textureId, accessor.getFrameCount()));
     }
 
-    @Override
-    public void periodicTick() {
-        resizeWhenNeeded();
-        super.periodicTick();
-    }
-
-    private void resizeWhenNeeded() {
+    private void resizeWhenNeeded(boolean doLock) {
         final int[] width = new int[1];
         final int[] height = new int[1];
         glfwGetFramebufferSize(accessor.getGlWindow(), width, height);
@@ -301,8 +311,12 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
                 accessor.getWinWidth() != width[0] ||
                 accessor.getFbHeight() != height[0] ||
                 accessor.getWinHeight() != height[0]) {
-            recreateDisplayContext();
-            recreateFramebuffer();
+            if (doLock) {
+                recreateContext();
+            } else {
+                recreateDisplayContext();
+                recreateFramebuffer();
+            }
         }
     }
 
