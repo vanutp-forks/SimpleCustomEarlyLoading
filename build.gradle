@@ -14,8 +14,15 @@ group = 'cz.lukaskabc.minecraft.mod_loader.loading.simple_custom_early_loading'
 version = mod_version
 
 repositories {
-    mavenLocal()
     mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven { url = uri("https://maven.vanutp.dev/main") }
+        }
+        filter {
+            includeGroup("net.ellerton.japng")
+        }
+    }
 }
 
 configurations {
@@ -60,8 +67,8 @@ neoForge {
 
 dependencies {
     api("org.jspecify:jspecify:1.0.0")
-    shade implementation("japng:api:0.5.1")
-    clientAdditionalRuntimeClasspath("japng:api:0.5.1")
+    shade implementation("net.ellerton.japng:api:0.6.0")
+    clientAdditionalRuntimeClasspath("net.ellerton.japng:api:0.6.0")
 
     // test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.1'
