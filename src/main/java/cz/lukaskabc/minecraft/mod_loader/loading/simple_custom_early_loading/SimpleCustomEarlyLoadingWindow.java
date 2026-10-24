@@ -17,10 +17,7 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
@@ -266,6 +263,15 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
 
     @Override
     public long setupMinecraftWindow(IntSupplier width, IntSupplier height, Supplier<String> title, LongSupplier monitorSupplier) {
+        // Copied from super to wait for resizeTick initialization
+        try {
+            accessor.getInitializationFuture().get(30, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            Thread.dumpStack();
+            crash("We seem to be having trouble initializing the window, waited for 30 seconds");
+        }
         while (!resizeTick.isDone()) {
             resizeTick.cancel(false);
         }

@@ -80,6 +80,10 @@ public class RefDisplayWindow {
         renderScheduler.set(target, service);
     }
 
+    public ScheduledFuture<?> getInitializationFuture() {
+        return (ScheduledFuture<?>) initializationFuture.get(target);
+    }
+
     /**
      * Sets the {@link DisplayWindow#initializationFuture} field.
      *
