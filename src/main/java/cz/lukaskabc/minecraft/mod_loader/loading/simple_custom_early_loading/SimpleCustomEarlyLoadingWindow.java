@@ -255,6 +255,10 @@ public class SimpleCustomEarlyLoadingWindow extends DisplayWindow implements Imm
         resizeTick = accessor.getRenderScheduler().scheduleAtFixedRate(() -> resizeWhenNeeded(true), 50, 50, TimeUnit.MILLISECONDS);
         recreateContext();
         glfwMakeContextCurrent(accessor.getGlWindow());
+        // disable vsync, otherwise renderThreadFunc waits for every frame to render,
+        // even if the window is not being rendered (e.g. when out of focus)
+        // and acquiring the lock in setupMinecraftWindow fails in time
+        glfwSwapInterval(0);
         final List<RenderElement> elements = accessor.getElements();
         elements.clear();
         constructElements(mcVersion, forgeVersion, elements);
